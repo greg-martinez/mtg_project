@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="author" content="Greg Martinez">
+	<meta name="description" content="Playground for creating webpage">
+	<!-- <meta http-equiv="refresh" content="30"> -->
+	<meta name="viewport" content="width=device-width, initial_scale=1.0">
+	
+	<title>MTG Metrics</title>
+
+	<style type="text/css">
+
+		.header {
+			font-size: 24pt;
+			width: 100%;
+			border: 5px solid black;
+			text-align: center;
+		}
+
+		.navigation_bar {
+			list-style-type: none;
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+			background-color: #333333;
+
+		}
+
+		.navigation_bar li {
+			float: left;
+		}
+
+		.navigation_bar li a {
+			display: block;
+			color: white;
+			text-align: center;
+			padding: 16px;
+			text-decoration: none;
+		}
+
+		.page_header {
+			font-size: 18pt;
+
+		}
+
+		.graph_display {
+			float: left;
+			padding: 20px;
+			background-color: lightgray;
+			text-align: center;
+
+		}
+
+		.graph_display:after {
+			content: "";
+			display: table;
+			clear: both;
+		}
+
+		@media (max-width: 600px) {
+		  .navigation_bar, .graph_display {
+		    width: 100%;
+		  }
+		}
+
+		.column {
+			float: left;
+		}
+
+		.column.left {
+			width: 25%;
+		}
+
+		.column.right {
+			width: 75%;
+		}
+
+		#p001 {
+			font-size: 15pt;
+		}
+
+	</style>
+</head>
+
+<body>
+	<div class="header">
+		<h1>MTG Standard Metrics</h1>
+	</div>
+
+	<div>
+		<ul class="navigation_bar">
+			<li><a href="#change_graph" onclick="changeGraph('home')">Home</a></li>
+			<li><a href="#change_graph" onclick="changeGraph('thb')">THB</a></li>
+			<li><a href="#change_graph" onclick="changeGraph('eld')">ELD</a></li>
+			<li><a href="#change_graph" onclick="changeGraph('war')">WAR</a></li>
+		</ul>
+	</div>
+
+	<div class="page_header">
+		<p>Set Breakdown:</p>
+	</div>
+	<div class="column">
+		<p id="page_title"></p>
+		<div class="graph_display">
+			<img src="compare_colors.png" id="graph">
+		</div>
+
+<!-- 		<div class="column left">
+			<p>Here is a little bit of text</p>
+		</div>
+		<div class="column right">
+			<div class="graph_display">
+				<img src="compare_colors.png" id="graph">
+			</div>
+		</div> -->
+	</div>
+
+	<script type="text/javascript" id="change_graph">
+		var sets = {
+			"home": "compare_colors.png",
+			"thb": "thb_top_5.png",
+			"eld": "eld_top_5.png",
+			"war": "good card.png"
+		}
+		function changeGraph(set) {
+			document.getElementById("graph").src = sets[set];
+			if (set != "home") {
+				document.getElementById("page_title").innerHTML = "Top Cards in " + set + " Main Boards";
+			}
+			else {
+				document.getElementById("page_title").innerHTML = ""
+			}
+			
+		}
+	</script>
+
+</body>
+</html>
