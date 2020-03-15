@@ -158,17 +158,25 @@ def generate_pdf(set_1="ELD", set_2="THB"):
 
 def get_card_info(card_name: str) -> list:
     
-    url = "https://api.scryfall.com/cards/search?q=name%3A" + card_name
+    url = (
+        "https://api.scryfall.com/cards/search?q=name%3A" 
+        + card_name
+    )
     
     api_results = requests.get(url)
     
     api_json = api_results.json()["data"][0]
-    
-    return [api_json["colors"], api_json["set"]]
+
+    return len(api_json["color_identity"])
 
 def get_card_name(set_code: str, collectors_number: str) -> str:
     
-    url = "https://api.scryfall.com/cards/" + set_code + "/" + collectors_number
+    url = (
+        "https://api.scryfall.com/cards/" 
+        + set_code 
+        + "/" 
+        + collectors_number
+    )
     
     api_results = requests.get(url)
     
@@ -178,19 +186,47 @@ def get_card_name(set_code: str, collectors_number: str) -> str:
 
 def get_set_info(set_code: str) -> (dict, dict):
     
-    url = "https://api.scryfall.com/cards/search?order=set&q=set%3A" + set_code
+    url = (
+        "https://api.scryfall.com/cards/search?order=set&q=set%3A" 
+        + set_code
+    )
+    
     page = 1
     
     api_results = requests.get(url)
     
     api_json = api_results.json()
     
-    set_info_by_name = {}
-    set_info_by_number = {}
+    set_info = {}
     
     for card in api_json["data"]:
-        set_info_by_name[card["name"]] = card["colors"]
-        set_info_by_number[card["collector_number"]] = card["name"]
+        name = card["name"]
+        collector_number = card["collector_number"]
+        color_id = card["color_identity"]
+        type_line = card["type_line"]
+        
+        try:
+            oracle_text = card["oracle_text"].replace("\n", " + ")
+        except KeyError:
+            oracle_text = (
+                card["card_faces"][0]["oracle_text"].replace("\n", " + ")
+                + " // "
+                + card["card_faces"][1]["oracle_text"].replace("\n", " + ")
+            )
+        
+        set_info[name] = {
+            "collector_number": collector_number,
+            "color_id": [],
+            "type_line": type_line,
+            "oracle_text": oracle_text
+        }
+        
+        if len(color_id) > 0:
+            set_info[name][
+                "color_id"] = color_id
+        elif "Artifact" in type_line:
+            set_info[name][
+                "color_id"] = ["A"]
         
     check_for_more = api_json["has_more"]
   
@@ -203,12 +239,37 @@ def get_set_info(set_code: str) -> (dict, dict):
         api_json_next_page = api_results_next_page.json()
         
         for card in api_json_next_page["data"]:
-            set_info_by_name[card["name"]] = card["colors"]
-            set_info_by_number[card["collector_number"]] = card["name"]
+            name = card["name"]
+            collector_number = card["collector_number"]
+            color_id = card["color_identity"]
+            type_line = card["type_line"]
+            
+            try:
+                oracle_text = card["oracle_text"].replace("\n", " + ")
+            except KeyError:
+                oracle_text = (
+                    card["card_faces"][0]["oracle_text"].replace("\n", " + ")
+                    + " // "
+                    + card["card_faces"][1]["oracle_text"].replace("\n", " + ")
+                )
+            
+            set_info[name] = {
+                "collector_number": collector_number,
+                "color_id": [],
+                "type_line": type_line,
+                "oracle_text": oracle_text
+            }
         
-        check_for_more = api_json_next_page["has_more"]
-    
-    return set_info_by_name, set_info_by_number
+            if len(color_id) > 0:
+                set_info[name][
+                    "color_id"] = color_id
+            elif "Artifact" in type_line:
+                set_info[name][
+                    "color_id"] = ["A"]
+
+            check_for_more = api_json_next_page["has_more"]
+
+    return set_info
 
 def format_decklist(decklist: str) -> str:
     
@@ -218,27 +279,32 @@ def format_decklist(decklist: str) -> str:
 
 def list_colors(card_name: str, set_code: str) -> str:
     
-    for card in standard_sets[set_code]:
-        if (re.match(card_name + ".+", card) or card_name == card):
-            colors = standard_sets[set_code][card]
-    
+    for card in set_codes[set_code]:
+        
+        if (card_name in card):
+            colors = set_codes[set_code][card]["color_id"]
+        
     return colors
 
 def split_qty_and_name(formatted_decklist: str) -> (list, list):
     
     qty_column = []
     name_column = []
+    code_column = []
     
     for card in formatted_decklist:
-        if card == "":
+        
+        if (card == "Sideboard") | (card == ""):
             continue
         
         qty, name = card.split(maxsplit=1)
+        code = re.findall("\(.+\)", name)[0][1:-1]
         
         qty_column.append(qty)
         name_column.append(name)
+        code_column.append(code)
     
-    return qty_column, name_column
+    return qty_column, name_column, code_column
 
 def export_deck(mtga_decklist):
     color_order = {
@@ -246,44 +312,73 @@ def export_deck(mtga_decklist):
         "U": 2,
         "B": 3,
         "R": 4,
-        "G": 5
+        "G": 5,
+        "A": 6,
+        "L": 7
     }
     decklist = format_decklist(mtga_decklist)
-    decklist_count, decklist_name = split_qty_and_name(decklist)
+    
+    (
+        decklist_count, 
+        decklist_name, 
+        decklist_codes 
+    ) = split_qty_and_name(decklist)
     
     color_identity = []
+    corrected_names = []
+    type_lines = []
+    oracle_texts = []
+    
     for name in decklist_name:
-        for set_code in standard_sets:
+        
+        raw_set_code = re.findall("\(.+\)", name)
+        
+        if len(raw_set_code) > 0:
+            set_code = raw_set_code[0][1:-1].lower()
+        
+        if set_code not in set_codes:
+            set_codes[set_code] = get_set_info(set_code)
+                    
+        for set_code in set_codes:
+            
             if set_code.upper() in name:
-                colors = list_colors(name.split(" (")[0], set_code)
+                correct_name = name.split(" (")[0]
+                
+                for name in set_codes[set_code]:
+                    if correct_name in name:
+                        correct_name = name
+                
+                corrected_names.append(correct_name)
+                
+                colors = list_colors(correct_name, set_code)
                 colors.sort(key=lambda x: color_order[x])
                 color_identity.append("".join(colors))
-    
-    with open("decklists.txt", "a") as text_file:
+                
+                type_line = set_codes[set_code][correct_name]["type_line"]
+                type_lines.append(type_line)
+                
+                oracle_text = set_codes[set_code][correct_name]["oracle_text"]
+                oracle_texts.append(oracle_text)
+            
+    with open("decklists.txt", "a", encoding="utf-8") as text_file:
         text_file.write("\n---\n")
-        for card in list(zip(
-        	decklist_count, 
-        	decklist_name, 
-        	color_identity
-    	)):
+        for card in list(
+            zip(
+                decklist_count, 
+                corrected_names, 
+                color_identity, 
+                decklist_codes,
+                type_lines,
+                oracle_texts
+            )
+        ):
             text_file.write(
-            	card[0] + ";" + card[1] + ";" + card[2] + "\n"
-        	)
-
-if __name__ == "__main__":
-
-	thb = FormatData("Set Metrics", "THB")
-	eld = FormatData("Set Metrics", "ELD")
-
-	thb_card_counts = get_card_counts_df(thb)
-	eld_card_counts = get_card_counts_df(eld)
-
-	save_tables(thb_card_counts, "thb_top_5.png")
-	save_tables(eld_card_counts, "eld_top_5.png")
-
-	set_1_colors = eld.color_count
-	set_2_colors = thb.color_count
-
-	color_comparison = compare_standard_colors(set_1_colors, set_2_colors)
-	plt.savefig(r".\MTG Webpage\compare_colors.png")
-	plt.close(color_comparison)
+                card[0] + ";"
+                + card[1] + ";"
+                + "main" + ";"
+                + card[2] + ";"
+                + card[3] + ";"
+                + card[4] + ";"
+                + card[5]
+                + "\n"
+            )
